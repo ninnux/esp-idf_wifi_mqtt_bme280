@@ -313,6 +313,8 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event)
     return ESP_OK;
 }
 
+static int s_retry_num = 0;
+
 static esp_err_t wifi_event_handler(void *ctx, system_event_t *event)
 {
     switch (event->event_id) {
@@ -324,9 +326,17 @@ static esp_err_t wifi_event_handler(void *ctx, system_event_t *event)
 
             break;
         case SYSTEM_EVENT_STA_DISCONNECTED:
-            esp_wifi_connect();
-            xEventGroupClearBits(wifi_event_group, CONNECTED_BIT);
+        {
+            if (s_retry_num < 3) {
+            	esp_wifi_connect();
+            	xEventGroupClearBits(wifi_event_group, CONNECTED_BIT);
+                s_retry_num++;
+	    }else{
+		printf("restart!!\n");
+		esp_restart();	
+	    } 
             break;
+	}
         default:
             break;
     }
