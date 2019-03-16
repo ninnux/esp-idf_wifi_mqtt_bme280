@@ -56,7 +56,7 @@ const static int CONNECTED_BIT = BIT0;
 
 static RTC_DATA_ATTR struct timeval sleep_enter_time;
 
-uint8_t msgData[20];
+uint8_t msgData[32];
 
 SemaphoreHandle_t xSemaphore = NULL;
 
@@ -209,7 +209,7 @@ void task_bme280_normal_mode(void *ignore)
 	 p=psum/i*10;
 	 t=tsum/i*10;
 	 printf("hum:%d,temp:%d,pres:%d\n",h,t,p);
-	 sprintf((char*)msgData,"hum:%d,temp:%d,pres:%d",h,t,p);
+	 sprintf((char*)msgData,"{\"hum\":%d,\"temp\":%d,\"pres\":%d}",h,t,p);
 	
 	} else {
 		ESP_LOGE(TAG_BME280, "init or setting error. code: %d", com_rslt);
@@ -281,7 +281,7 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event)
     switch (event->event_id) {
         case MQTT_EVENT_CONNECTED:
             ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
-            msg_id = esp_mqtt_client_publish(client, "ambiente/test_wifi_dht22/jsondata",(const char *) msgData, 0, 1, 0);
+            msg_id = esp_mqtt_client_publish(client, "ambiente/test_wifi_bme280/jsondata",(const char *) msgData, 0, 1, 0);
             break;
         case MQTT_EVENT_DISCONNECTED:
             ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
