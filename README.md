@@ -1,2 +1,2 @@
-# ESP-MQTT + DHT22 sample application
+# ESP-MQTT + BME280 sample application
 
