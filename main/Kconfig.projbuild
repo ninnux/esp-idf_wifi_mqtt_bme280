@@ -21,5 +21,10 @@ menu "Example Configuration"
     config BROKER_URL_FROM_STDIN
         bool
         default y if BROKER_URL = "FROM_STDIN"
+    config MQTT_NODE_NAME
+        string "node name"
+        default ""
+        help
+            Node name: used in mqtt topic es. ambiente/<node_name>/jsondata
 
 endmenu

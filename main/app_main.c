@@ -24,9 +24,7 @@
 #include "driver/gpio.h"
 #include "sdkconfig.h"
 
-#include "driver/gpio.h"
 #include "driver/i2c.h"
-
 
 #include "esp_sleep.h"
 #include "esp32/ulp.h"
@@ -40,6 +38,9 @@
 
 #include "bme280.h"
 
+#include "ninux_esp32_ota.h"
+
+
 #define SDA_PIN GPIO_NUM_21
 #define SCL_PIN GPIO_NUM_22
 
@@ -48,10 +49,12 @@
 #define I2C_MASTER_ACK 0
 #define I2C_MASTER_NACK 1
 
-static const char *TAG = "MQTT_EXAMPLE";
+//static const char *TAG = "MQTT_EXAMPLE";
+//const char *TAG = "MQTT_EXAMPLE";
 
-static EventGroupHandle_t wifi_event_group;
-const static int CONNECTED_BIT = BIT0;
+//static EventGroupHandle_t wifi_event_group;
+EventGroupHandle_t wifi_event_group;
+const int CONNECTED_BIT = BIT0;
 
 
 static RTC_DATA_ATTR struct timeval sleep_enter_time;
@@ -141,7 +144,7 @@ void task_bme280_normal_mode(void *ignore)
    struct bme280_t bme280 = {
    	.bus_write = BME280_I2C_bus_write,
    	.bus_read = BME280_I2C_bus_read,
-   	.dev_addr = BME280_I2C_ADDRESS2,
+   	.dev_addr = CONFIG_BME280_ADDRESS,
    	.delay_msec = BME280_delay_msek
    };
    int i=0;
@@ -210,6 +213,7 @@ void task_bme280_normal_mode(void *ignore)
 	 t=tsum/i*10;
 	 printf("hum:%d,temp:%d,pres:%d\n",h,t,p);
 	 sprintf((char*)msgData,"{\"hum\":%d,\"temp\":%d,\"pres\":%d}",h,t,p);
+	 printf("%s",msgData);
 	
 	} else {
 		ESP_LOGE(TAG_BME280, "init or setting error. code: %d", com_rslt);
@@ -277,11 +281,14 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event)
 {
     esp_mqtt_client_handle_t client = event->client;
     int msg_id;
+    char mqtt_topic[128];
+    bzero(mqtt_topic,sizeof(mqtt_topic));
+    sprintf(mqtt_topic,"ambiente/%s/jsondata",CONFIG_MQTT_NODE_NAME);
     // your_context_t *context = event->context;
     switch (event->event_id) {
         case MQTT_EVENT_CONNECTED:
             ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
-            msg_id = esp_mqtt_client_publish(client, "ambiente/test_wifi_bme280/jsondata",(const char *) msgData, 0, 1, 0);
+            msg_id = esp_mqtt_client_publish(client, mqtt_topic,(const char *) msgData, 0, 1, 0);
             break;
         case MQTT_EVENT_DISCONNECTED:
             ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
@@ -411,7 +418,7 @@ static void mqtt_app_start(void)
       esp_mqtt_client_start(client);
       
       //vTaskDelay(30 * 1000 / portTICK_PERIOD_MS);
-      sleeppa(30);
+      sleeppa(300);
 
     }else{
       //printf("semaforo occupato");
@@ -436,8 +443,19 @@ void app_main()
 
 
 
-    nvs_flash_init();
+    esp_err_t err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        // 1.OTA app partition table has a smaller NVS partition size than the non-OTA
+        // partition table. This size mismatch may cause NVS initialization to fail.
+        // 2.NVS partition contains data in new format and cannot be recognized by this version of code.
+        // If this happens, we erase NVS partition and initialize NVS again.
+        ESP_ERROR_CHECK(nvs_flash_erase());
+        err = nvs_flash_init();
+    }
     wifi_init();
+    esp_ota_mark_app_valid_cancel_rollback(); 
+    ninux_esp32_ota();
+
 
     vSemaphoreCreateBinary( xSemaphore );
     vTaskDelay( 1000 / portTICK_RATE_MS );
