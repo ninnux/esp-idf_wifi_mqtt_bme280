@@ -1,0 +1,9 @@
+menu "BME280 Configuration"
+
+    config BME280_ADDRESS
+        hex "Sensor address"
+        default "0x76"
+        help
+            BME280 I2C address: 0x76 or 0x77
+
+endmenu
