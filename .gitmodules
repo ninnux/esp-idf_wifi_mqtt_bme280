@@ -1,3 +1,6 @@
 [submodule "components/ninux_esp32_ota"]
 	path = components/ninux_esp32_ota
 	url = https://github.com/ninnux/ninux_esp32_ota.git
+[submodule "components/ninux_sensordata_pb"]
+	path = components/ninux_sensordata_pb
+	url = https://github.com/ninnux/ninux_sensordata_pb.git

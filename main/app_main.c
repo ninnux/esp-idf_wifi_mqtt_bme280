@@ -40,9 +40,13 @@
 
 #include "ninux_esp32_ota.h"
 
+#include "ninux_sensordata_pb.h"
 
-#define SDA_PIN GPIO_NUM_21
-#define SCL_PIN GPIO_NUM_22
+//#define SDA_PIN GPIO_NUM_21
+//#define SCL_PIN GPIO_NUM_22
+
+#define SDA_PIN GPIO_NUM_16
+#define SCL_PIN GPIO_NUM_17
 
 #define TAG_BME280 "BME280"
 
@@ -56,12 +60,72 @@
 EventGroupHandle_t wifi_event_group;
 const int CONNECTED_BIT = BIT0;
 
+#define TIMESLOT 3 
 
 static RTC_DATA_ATTR struct timeval sleep_enter_time;
+
+RTC_DATA_ATTR char rtc_buffer[2048];
+RTC_DATA_ATTR int rtc_buffer_len=0;
+
+RTC_DATA_ATTR int deepsleep=0;
+RTC_DATA_ATTR int counter=0;
 
 uint8_t msgData[32];
 
 SemaphoreHandle_t xSemaphore = NULL;
+
+void sleeppa(int sec)
+{
+    struct timeval now;
+    gettimeofday(&now, NULL);
+    int sleep_time_ms = (now.tv_sec - sleep_enter_time.tv_sec) * 1000 + (now.tv_usec - sleep_enter_time.tv_usec) / 1000;
+
+    switch (esp_sleep_get_wakeup_cause()) {
+        case ESP_SLEEP_WAKEUP_EXT1: {
+            uint64_t wakeup_pin_mask = esp_sleep_get_ext1_wakeup_status();
+            if (wakeup_pin_mask != 0) {
+                int pin = __builtin_ffsll(wakeup_pin_mask) - 1;
+                printf("Wake up from GPIO %d\n", pin);
+            } else {
+                printf("Wake up from GPIO\n");
+            }
+            break;
+        }
+        case ESP_SLEEP_WAKEUP_TIMER: {
+            printf("Wake up from timer. Time spent in deep sleep: %dms\n", sleep_time_ms);
+            break;
+        }
+        case ESP_SLEEP_WAKEUP_UNDEFINED:
+        default:
+            printf("Not a deep sleep reset\n");
+  	    //sensordata_init2((unsigned char **) &rtc_buffer, &rtc_buffer_len);
+    }
+
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+    const int wakeup_time_sec = sec;
+    printf("Enabling timer wakeup, %ds\n", wakeup_time_sec);
+    esp_sleep_enable_timer_wakeup(wakeup_time_sec * 1000000);
+
+    //const int ext_wakeup_pin_1 = 25;
+    //const uint64_t ext_wakeup_pin_1_mask = 1ULL << ext_wakeup_pin_1;
+    //const int ext_wakeup_pin_2 = 26;
+    //const uint64_t ext_wakeup_pin_2_mask = 1ULL << ext_wakeup_pin_2;
+
+    //printf("Enabling EXT1 wakeup on pins GPIO%d, GPIO%d\n", ext_wakeup_pin_1, ext_wakeup_pin_2);
+    //esp_sleep_enable_ext1_wakeup(ext_wakeup_pin_1_mask | ext_wakeup_pin_2_mask, ESP_EXT1_WAKEUP_ANY_HIGH);
+
+    // Isolate GPIO12 pin from external circuits. This is needed for modules
+    // which have an external pull-up resistor on GPIO12 (such as ESP32-WROVER)
+    // to minimize current consumption.
+    rtc_gpio_isolate(GPIO_NUM_12);
+
+    printf("Entering deep sleep\n");
+    gettimeofday(&sleep_enter_time, NULL);
+
+    deepsleep=1;
+    esp_deep_sleep_start();
+}
 
 void i2c_master_init()
 {
@@ -212,8 +276,11 @@ void task_bme280_normal_mode(void *ignore)
 	 p=psum/i*10;
 	 t=tsum/i*10;
 	 printf("hum:%d,temp:%d,pres:%d\n",h,t,p);
-	 sprintf((char*)msgData,"{\"hum\":%d,\"temp\":%d,\"pres\":%d}",h,t,p);
-	 printf("%s",msgData);
+	 //sprintf((char*)msgData,"{\"hum\":%d,\"temp\":%d,\"pres\":%d}",h,t,p);
+	 //printf("%s",msgData);
+  	 char* keys[]={"pres","temp","hum"}; 
+  	 int values[]={p,t,h};
+  	 sensordata_insert_values2((unsigned char **) &rtc_buffer,counter,keys,values,3,&rtc_buffer_len);
 	
 	} else {
 		ESP_LOGE(TAG_BME280, "init or setting error. code: %d", com_rslt);
@@ -223,72 +290,29 @@ void task_bme280_normal_mode(void *ignore)
        }
     
    }
+	
+   	if(counter%TIMESLOT!=0){
+		counter+=1;
+		sleeppa(10);
+        };
 	vTaskDelete(NULL);
 }
 
 
-void sleeppa(int sec)
-{
-    struct timeval now;
-    gettimeofday(&now, NULL);
-    int sleep_time_ms = (now.tv_sec - sleep_enter_time.tv_sec) * 1000 + (now.tv_usec - sleep_enter_time.tv_usec) / 1000;
-
-    switch (esp_sleep_get_wakeup_cause()) {
-        case ESP_SLEEP_WAKEUP_EXT1: {
-            uint64_t wakeup_pin_mask = esp_sleep_get_ext1_wakeup_status();
-            if (wakeup_pin_mask != 0) {
-                int pin = __builtin_ffsll(wakeup_pin_mask) - 1;
-                printf("Wake up from GPIO %d\n", pin);
-            } else {
-                printf("Wake up from GPIO\n");
-            }
-            break;
-        }
-        case ESP_SLEEP_WAKEUP_TIMER: {
-            printf("Wake up from timer. Time spent in deep sleep: %dms\n", sleep_time_ms);
-            break;
-        }
-        case ESP_SLEEP_WAKEUP_UNDEFINED:
-        default:
-            printf("Not a deep sleep reset\n");
-    }
-
-    vTaskDelay(1000 / portTICK_PERIOD_MS);
-
-    const int wakeup_time_sec = sec;
-    printf("Enabling timer wakeup, %ds\n", wakeup_time_sec);
-    esp_sleep_enable_timer_wakeup(wakeup_time_sec * 1000000);
-
-    const int ext_wakeup_pin_1 = 25;
-    const uint64_t ext_wakeup_pin_1_mask = 1ULL << ext_wakeup_pin_1;
-    const int ext_wakeup_pin_2 = 26;
-    const uint64_t ext_wakeup_pin_2_mask = 1ULL << ext_wakeup_pin_2;
-
-    printf("Enabling EXT1 wakeup on pins GPIO%d, GPIO%d\n", ext_wakeup_pin_1, ext_wakeup_pin_2);
-    esp_sleep_enable_ext1_wakeup(ext_wakeup_pin_1_mask | ext_wakeup_pin_2_mask, ESP_EXT1_WAKEUP_ANY_HIGH);
-
-    // Isolate GPIO12 pin from external circuits. This is needed for modules
-    // which have an external pull-up resistor on GPIO12 (such as ESP32-WROVER)
-    // to minimize current consumption.
-    rtc_gpio_isolate(GPIO_NUM_12);
-
-    printf("Entering deep sleep\n");
-    gettimeofday(&sleep_enter_time, NULL);
-
-    esp_deep_sleep_start();
-}
 static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event)
 {
     esp_mqtt_client_handle_t client = event->client;
     int msg_id;
     char mqtt_topic[128];
     bzero(mqtt_topic,sizeof(mqtt_topic));
-    sprintf(mqtt_topic,"ambiente/%s/jsondata",CONFIG_MQTT_NODE_NAME);
+    sprintf(mqtt_topic,"ambiente/%s/ninuxsensordata_pb",CONFIG_MQTT_NODE_NAME);
     // your_context_t *context = event->context;
     switch (event->event_id) {
         case MQTT_EVENT_CONNECTED:
             ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
-            msg_id = esp_mqtt_client_publish(client, mqtt_topic,(const char *) msgData, 0, 1, 0);
+            msg_id = esp_mqtt_client_publish(client, mqtt_topic,rtc_buffer, rtc_buffer_len, 1, 0);
+            //msg_id = esp_mqtt_client_publish(client, mqtt_topic,(const char *) msgData, 0, 1, 0);
+	    rtc_buffer_len=0;
             break;
         case MQTT_EVENT_DISCONNECTED:
             ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
@@ -304,6 +328,8 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event)
             break;
         case MQTT_EVENT_PUBLISHED:
             ESP_LOGI(TAG, "MQTT_EVENT_PUBLISHED, msg_id=%d", event->msg_id);
+      	    //xSemaphoreGive( xSemaphore );
+      	    vTaskDelete(NULL); 
             break;
         case MQTT_EVENT_DATA:
             ESP_LOGI(TAG, "MQTT_EVENT_DATA");
@@ -367,6 +393,8 @@ static void wifi_init(void)
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_set_config(ESP_IF_WIFI_STA, &wifi_config));
     ESP_LOGI(TAG, "start the WIFI SSID:[%s]", CONFIG_WIFI_SSID);
+    //esp_wifi_set_max_tx_power(40);
+    //esp_wifi_set_ps(WIFI_PS_MAX_MODEM);
     ESP_ERROR_CHECK(esp_wifi_start());
     ESP_LOGI(TAG, "Waiting for wifi");
     xEventGroupWaitBits(wifi_event_group, CONNECTED_BIT, false, true, portMAX_DELAY);
@@ -418,7 +446,11 @@ static void mqtt_app_start(void)
       esp_mqtt_client_start(client);
       
       //vTaskDelay(30 * 1000 / portTICK_PERIOD_MS);
-      sleeppa(300);
+      counter+=1;
+      sleeppa(10);
+      
+
+
 
     }else{
       //printf("semaforo occupato");
@@ -429,6 +461,9 @@ static void mqtt_app_start(void)
 
 void app_main()
 {
+    printf("counter:%d\n",counter);
+    printf("deepsleep:%d\n",deepsleep);
+
     ESP_LOGI(TAG, "[APP] Startup..");
     ESP_LOGI(TAG, "[APP] Free memory: %d bytes", esp_get_free_heap_size());
     ESP_LOGI(TAG, "[APP] IDF version: %s", esp_get_idf_version());
@@ -452,9 +487,11 @@ void app_main()
         ESP_ERROR_CHECK(nvs_flash_erase());
         err = nvs_flash_init();
     }
+   if(counter%TIMESLOT==0 || deepsleep==0){
     wifi_init();
     esp_ota_mark_app_valid_cancel_rollback(); 
     ninux_esp32_ota();
+   }
 
 
     vSemaphoreCreateBinary( xSemaphore );
@@ -464,5 +501,11 @@ void app_main()
     xTaskCreate(&task_bme280_normal_mode, "bme280_normal_mode",  2048, NULL, 6, NULL);
     vTaskDelay( 3000 / portTICK_RATE_MS );
 
-    mqtt_app_start();
+   if(counter%TIMESLOT==0 || deepsleep==0){
+   	 mqtt_app_start();
+   }else{
+      counter+=1;
+   } 
+   
+	 
 }
