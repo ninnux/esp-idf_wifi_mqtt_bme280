@@ -60,11 +60,11 @@
 EventGroupHandle_t wifi_event_group;
 const int CONNECTED_BIT = BIT0;
 
-#define TIMESLOT 3 
+#define TIMESLOT 4 
 
 static RTC_DATA_ATTR struct timeval sleep_enter_time;
 
-RTC_DATA_ATTR char rtc_buffer[2048];
+RTC_DATA_ATTR char rtc_buffer[4000];
 RTC_DATA_ATTR int rtc_buffer_len=0;
 
 RTC_DATA_ATTR int deepsleep=0;
@@ -312,7 +312,9 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event)
             ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
             msg_id = esp_mqtt_client_publish(client, mqtt_topic,rtc_buffer, rtc_buffer_len, 1, 0);
             //msg_id = esp_mqtt_client_publish(client, mqtt_topic,(const char *) msgData, 0, 1, 0);
+	 
 	    rtc_buffer_len=0;
+  	    sensordata_init2((unsigned char **) &rtc_buffer, &rtc_buffer_len);
             break;
         case MQTT_EVENT_DISCONNECTED:
             ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
