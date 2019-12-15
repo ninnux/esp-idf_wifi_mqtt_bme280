@@ -60,11 +60,11 @@
 EventGroupHandle_t wifi_event_group;
 const int CONNECTED_BIT = BIT0;
 
-#define TIMESLOT 4 
+#define TIMESLOT 3 
 
 static RTC_DATA_ATTR struct timeval sleep_enter_time;
 
-RTC_DATA_ATTR char rtc_buffer[4000];
+RTC_DATA_ATTR char rtc_buffer[1024];
 RTC_DATA_ATTR int rtc_buffer_len=0;
 
 RTC_DATA_ATTR int deepsleep=0;
@@ -278,9 +278,11 @@ void task_bme280_normal_mode(void *ignore)
 	 printf("hum:%d,temp:%d,pres:%d\n",h,t,p);
 	 //sprintf((char*)msgData,"{\"hum\":%d,\"temp\":%d,\"pres\":%d}",h,t,p);
 	 //printf("%s",msgData);
+   	if(counter%TIMESLOT!=0){
   	 char* keys[]={"pres","temp","hum"}; 
   	 int values[]={p,t,h};
   	 sensordata_insert_values2((unsigned char **) &rtc_buffer,counter,keys,values,3,&rtc_buffer_len);
+	} 
 	
 	} else {
 		ESP_LOGE(TAG_BME280, "init or setting error. code: %d", com_rslt);
@@ -314,7 +316,8 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event)
             //msg_id = esp_mqtt_client_publish(client, mqtt_topic,(const char *) msgData, 0, 1, 0);
 	 
 	    rtc_buffer_len=0;
-  	    sensordata_init2((unsigned char **) &rtc_buffer, &rtc_buffer_len);
+	    //bzero(rtc_buffer,rtc_buffer_len);
+  	    //sensordata_init2((unsigned char **) &rtc_buffer, &rtc_buffer_len);
             break;
         case MQTT_EVENT_DISCONNECTED:
             ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
@@ -447,7 +450,7 @@ static void mqtt_app_start(void)
       esp_mqtt_client_handle_t client = esp_mqtt_client_init(&mqtt_cfg);
       esp_mqtt_client_start(client);
       
-      //vTaskDelay(30 * 1000 / portTICK_PERIOD_MS);
+      vTaskDelay(2 * 1000 / portTICK_PERIOD_MS);
       counter+=1;
       sleeppa(10);
       
@@ -489,12 +492,13 @@ void app_main()
         ESP_ERROR_CHECK(nvs_flash_erase());
         err = nvs_flash_init();
     }
-   if(counter%TIMESLOT==0 || deepsleep==0){
+
+   //if(counter%TIMESLOT==0 || deepsleep==0){
+   if(counter%TIMESLOT==0 ){
     wifi_init();
     esp_ota_mark_app_valid_cancel_rollback(); 
     ninux_esp32_ota();
    }
-
 
     vSemaphoreCreateBinary( xSemaphore );
     vTaskDelay( 1000 / portTICK_RATE_MS );
@@ -503,7 +507,7 @@ void app_main()
     xTaskCreate(&task_bme280_normal_mode, "bme280_normal_mode",  2048, NULL, 6, NULL);
     vTaskDelay( 3000 / portTICK_RATE_MS );
 
-   if(counter%TIMESLOT==0 || deepsleep==0){
+   if(counter%TIMESLOT==0 ){
    	 mqtt_app_start();
    }else{
       counter+=1;
