@@ -60,7 +60,8 @@
 EventGroupHandle_t wifi_event_group;
 const int CONNECTED_BIT = BIT0;
 
-#define TIMESLOT 3 
+#define TIMESLOT 13 
+#define SLEEPTIME 300 
 
 static RTC_DATA_ATTR struct timeval sleep_enter_time;
 
@@ -295,7 +296,7 @@ void task_bme280_normal_mode(void *ignore)
 	
    	if(counter%TIMESLOT!=0){
 		counter+=1;
-		sleeppa(10);
+		sleeppa(SLEEPTIME);
         };
 	vTaskDelete(NULL);
 }
@@ -452,7 +453,7 @@ static void mqtt_app_start(void)
       
       vTaskDelay(2 * 1000 / portTICK_PERIOD_MS);
       counter+=1;
-      sleeppa(10);
+      sleeppa(SLEEPTIME);
       
 
 
