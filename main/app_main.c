@@ -60,8 +60,8 @@
 EventGroupHandle_t wifi_event_group;
 const int CONNECTED_BIT = BIT0;
 
-#define TIMESLOT 13 
-#define SLEEPTIME 300 
+#define TIMESLOT 5 
+#define SLEEPTIME 60 
 
 static RTC_DATA_ATTR struct timeval sleep_enter_time;
 
@@ -70,6 +70,7 @@ RTC_DATA_ATTR int rtc_buffer_len=0;
 
 RTC_DATA_ATTR int deepsleep=0;
 RTC_DATA_ATTR int counter=0;
+RTC_DATA_ATTR int timeref=0;
 
 uint8_t msgData[32];
 
@@ -282,7 +283,7 @@ void task_bme280_normal_mode(void *ignore)
    	if(counter%TIMESLOT!=0){
   	 char* keys[]={"pres","temp","hum"}; 
   	 int values[]={p,t,h};
-  	 sensordata_insert_values2((unsigned char **) &rtc_buffer,counter,keys,values,3,&rtc_buffer_len);
+  	 sensordata_insert_values2((unsigned char **) &rtc_buffer,timeref*SLEEPTIME,keys,values,3,&rtc_buffer_len);
 	} 
 	
 	} else {
@@ -296,6 +297,7 @@ void task_bme280_normal_mode(void *ignore)
 	
    	if(counter%TIMESLOT!=0){
 		counter+=1;
+      		timeref+=1;
 		sleeppa(SLEEPTIME);
         };
 	vTaskDelete(NULL);
@@ -335,6 +337,7 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event)
         case MQTT_EVENT_PUBLISHED:
             ESP_LOGI(TAG, "MQTT_EVENT_PUBLISHED, msg_id=%d", event->msg_id);
       	    //xSemaphoreGive( xSemaphore );
+	    timeref=0;
       	    vTaskDelete(NULL); 
             break;
         case MQTT_EVENT_DATA:
@@ -512,6 +515,7 @@ void app_main()
    	 mqtt_app_start();
    }else{
       counter+=1;
+      timeref+=1;
    } 
    
 	 
