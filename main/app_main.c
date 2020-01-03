@@ -60,8 +60,8 @@
 EventGroupHandle_t wifi_event_group;
 const int CONNECTED_BIT = BIT0;
 
-#define TIMESLOT 5 
-#define SLEEPTIME 60 
+#define TIMESLOT 13 
+#define SLEEPTIME 300 
 
 static RTC_DATA_ATTR struct timeval sleep_enter_time;
 
@@ -239,7 +239,8 @@ void task_bme280_normal_mode(void *ignore)
 	com_rslt += bme280_set_standby_durn(BME280_STANDBY_TIME_1_MS);
 	com_rslt += bme280_set_filter(BME280_FILTER_COEFF_16);
 
-	com_rslt += bme280_set_power_mode(BME280_NORMAL_MODE);
+	//com_rslt += bme280_set_power_mode(BME280_NORMAL_MODE);
+	com_rslt += bme280_set_power_mode(BME280_FORCED_MODE);
 	if (com_rslt == SUCCESS) {
 	 i=0;
 	 for(i=0;i<10;i++){
