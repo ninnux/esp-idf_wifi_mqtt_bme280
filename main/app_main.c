@@ -65,17 +65,20 @@ const int CONNECTED_BIT = BIT0;
 static RTC_DATA_ATTR struct timeval sleep_enter_time;
 
 uint8_t msgData[CAYENNE_LPP_MAX_BUFFER_SIZE];
+int msgDatalen;
 cayenne_lpp_t lpp = { 0 };
 
 SemaphoreHandle_t xSemaphore = NULL;
 
-static void _copy_buffer(cayenne_lpp_t *lpp,unsigned char* buf)
+static void _copy_buffer(cayenne_lpp_t *lpp,unsigned char* buf,int* lpplen)
 {
     printf("buffer:");
-    for (uint8_t i = 0; i < lpp->cursor; ++i) {
+    uint8_t i=0;
+    for (i = 0; i < lpp->cursor; ++i) {
         buf[i]=lpp->buffer[i];
 	printf("%c",buf[i]);
     }
+    *lpplen=i;
     printf("\n");
 
 }
@@ -238,13 +241,14 @@ void task_bme280_normal_mode(void *ignore)
 	 //memcpy(msgData,lpp.buffer,sizeof(lpp.buffer));
 	 //printf("msgData:%s\n",msgData);
 	 //bzero(msgData,sizeof(msgData));
-	 _copy_buffer(&lpp,msgData);
+	 //_copy_buffer(&lpp,msgData,&msgDatalen);
+	 //printf("message len:%d\n",msgDatalen);
 	 //memcpy(msgData,lpp.buffer,sizeof(lpp.buffer));
 	 //printf("buffer originale:%s\n",lpp.buffer);
-	 printf("buffer copiato:%s\n",msgData);
-	 for(i=0;i<42;i++){
-		printf("-%c-\n",msgData[i]);
-	 }
+	 //printf("buffer copiato:%s\n",msgData);
+	 //for(i=0;i<42;i++){
+	 //       printf("-%c-\n",msgData[i]);
+	 //}
 	
 	} else {
 		ESP_LOGE(TAG_BME280, "init or setting error. code: %d", com_rslt);
@@ -344,7 +348,9 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event)
         case MQTT_EVENT_CONNECTED:
             ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
 	    _print_buffer_int(&lpp);
-            msg_id = esp_mqtt_client_publish(client, mqtt_topic,(const char *) msgData, CAYENNE_LPP_MAX_BUFFER_SIZE, 1, 0);
+            //msg_id = esp_mqtt_client_publish(client, mqtt_topic,(const char *) msgData, CAYENNE_LPP_MAX_BUFFER_SIZE, 1, 0);
+            //msg_id = esp_mqtt_client_publish(client, mqtt_topic,(const char *) msgData, msgDatalen, 1, 0);
+            msg_id = esp_mqtt_client_publish(client, mqtt_topic,(const char *) lpp.buffer, lpp.cursor, 1, 0);
             break;
         case MQTT_EVENT_DISCONNECTED:
             ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
