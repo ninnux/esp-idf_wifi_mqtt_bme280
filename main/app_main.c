@@ -36,13 +36,18 @@
 #include "soc/rtc.h"
 
 
+
 #include "bme280.h"
 
 #include "ninux_esp32_ota.h"
 
+#include "cayenne_lpp.h"
 
-#define SDA_PIN GPIO_NUM_21
-#define SCL_PIN GPIO_NUM_22
+
+//#define SDA_PIN GPIO_NUM_21
+//#define SCL_PIN GPIO_NUM_22
+#define SDA_PIN GPIO_NUM_16
+#define SCL_PIN GPIO_NUM_17
 
 #define TAG_BME280 "BME280"
 
@@ -59,9 +64,21 @@ const int CONNECTED_BIT = BIT0;
 
 static RTC_DATA_ATTR struct timeval sleep_enter_time;
 
-uint8_t msgData[32];
+uint8_t msgData[CAYENNE_LPP_MAX_BUFFER_SIZE];
+cayenne_lpp_t lpp = { 0 };
 
 SemaphoreHandle_t xSemaphore = NULL;
+
+static void _copy_buffer(cayenne_lpp_t *lpp,unsigned char* buf)
+{
+    printf("buffer:");
+    for (uint8_t i = 0; i < lpp->cursor; ++i) {
+        buf[i]=lpp->buffer[i];
+	printf("%c",buf[i]);
+    }
+    printf("\n");
+
+}
 
 void i2c_master_init()
 {
@@ -208,12 +225,26 @@ void task_bme280_normal_mode(void *ignore)
 	     ESP_LOGE(TAG_BME280, "measure error. code: %d", com_rslt);
 	   }
 	 }
-	 h=hsum/i*10;
-	 p=psum/i*10;
-	 t=tsum/i*10;
-	 printf("hum:%d,temp:%d,pres:%d\n",h,t,p);
-	 sprintf((char*)msgData,"{\"hum\":%d,\"temp\":%d,\"pres\":%d}",h,t,p);
-	 printf("%s",msgData);
+	 //h=hsum/i*10;
+	 //p=psum/i*10;
+	 //t=tsum/i*10;
+	 //printf("hum:%d,temp:%d,pres:%d\n",h,t,p);
+	 //sprintf((char*)msgData,"{\"hum\":%d,\"temp\":%d,\"pres\":%d}",h,t,p);
+	 //printf("%s",msgData);
+         cayenne_lpp_add_temperature(&lpp, 1, tsum/i);
+         cayenne_lpp_add_relative_humidity(&lpp, 1, hsum/i);
+         cayenne_lpp_add_barometric_pressure(&lpp, 1, psum/i);
+	 //printf("lpp.buffer size:%d\n",sizeof(lpp.buffer));
+	 //memcpy(msgData,lpp.buffer,sizeof(lpp.buffer));
+	 //printf("msgData:%s\n",msgData);
+	 //bzero(msgData,sizeof(msgData));
+	 _copy_buffer(&lpp,msgData);
+	 //memcpy(msgData,lpp.buffer,sizeof(lpp.buffer));
+	 //printf("buffer originale:%s\n",lpp.buffer);
+	 printf("buffer copiato:%s\n",msgData);
+	 for(i=0;i<42;i++){
+		printf("-%c-\n",msgData[i]);
+	 }
 	
 	} else {
 		ESP_LOGE(TAG_BME280, "init or setting error. code: %d", com_rslt);
@@ -277,18 +308,43 @@ void sleeppa(int sec)
 
     esp_deep_sleep_start();
 }
+
+
+static void _print_buffer(cayenne_lpp_t *lpp)
+{
+    for (uint8_t i = 0; i < lpp->cursor; ++i) {
+        printf("%02X ", lpp->buffer[i]);
+    }
+    puts("");
+}
+
+static void _print_buffer_int(cayenne_lpp_t *lpp)
+{
+    printf("[");
+    for (uint8_t i = 0; i < lpp->cursor; ++i) {
+	if(i==0){
+        printf("%d", lpp->buffer[i]);
+	}else{
+        printf(",%d", lpp->buffer[i]);
+	}
+    }
+    //puts("");
+    printf("]");
+}
+
 static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event)
 {
     esp_mqtt_client_handle_t client = event->client;
     int msg_id;
     char mqtt_topic[128];
     bzero(mqtt_topic,sizeof(mqtt_topic));
-    sprintf(mqtt_topic,"ambiente/%s/jsondata",CONFIG_MQTT_NODE_NAME);
+    sprintf(mqtt_topic,"ambiente/%s/lpp",CONFIG_MQTT_NODE_NAME);
     // your_context_t *context = event->context;
     switch (event->event_id) {
         case MQTT_EVENT_CONNECTED:
             ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
-            msg_id = esp_mqtt_client_publish(client, mqtt_topic,(const char *) msgData, 0, 1, 0);
+	    _print_buffer_int(&lpp);
+            msg_id = esp_mqtt_client_publish(client, mqtt_topic,(const char *) msgData, CAYENNE_LPP_MAX_BUFFER_SIZE, 1, 0);
             break;
         case MQTT_EVENT_DISCONNECTED:
             ESP_LOGI(TAG, "MQTT_EVENT_DISCONNECTED");
@@ -464,5 +520,6 @@ void app_main()
     xTaskCreate(&task_bme280_normal_mode, "bme280_normal_mode",  2048, NULL, 6, NULL);
     vTaskDelay( 3000 / portTICK_RATE_MS );
 
+    printf("lpp.buffer 2 size:%d\n",sizeof(lpp.buffer));
     mqtt_app_start();
 }
