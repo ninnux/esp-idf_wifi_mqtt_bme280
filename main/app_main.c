@@ -64,8 +64,6 @@ const int CONNECTED_BIT = BIT0;
 
 static RTC_DATA_ATTR struct timeval sleep_enter_time;
 
-uint8_t msgData[CAYENNE_LPP_MAX_BUFFER_SIZE];
-int msgDatalen;
 cayenne_lpp_t lpp = { 0 };
 
 SemaphoreHandle_t xSemaphore = NULL;
@@ -228,27 +226,9 @@ void task_bme280_normal_mode(void *ignore)
 	     ESP_LOGE(TAG_BME280, "measure error. code: %d", com_rslt);
 	   }
 	 }
-	 //h=hsum/i*10;
-	 //p=psum/i*10;
-	 //t=tsum/i*10;
-	 //printf("hum:%d,temp:%d,pres:%d\n",h,t,p);
-	 //sprintf((char*)msgData,"{\"hum\":%d,\"temp\":%d,\"pres\":%d}",h,t,p);
-	 //printf("%s",msgData);
          cayenne_lpp_add_temperature(&lpp, 1, tsum/i);
          cayenne_lpp_add_relative_humidity(&lpp, 1, hsum/i);
          cayenne_lpp_add_barometric_pressure(&lpp, 1, psum/i);
-	 //printf("lpp.buffer size:%d\n",sizeof(lpp.buffer));
-	 //memcpy(msgData,lpp.buffer,sizeof(lpp.buffer));
-	 //printf("msgData:%s\n",msgData);
-	 //bzero(msgData,sizeof(msgData));
-	 //_copy_buffer(&lpp,msgData,&msgDatalen);
-	 //printf("message len:%d\n",msgDatalen);
-	 //memcpy(msgData,lpp.buffer,sizeof(lpp.buffer));
-	 //printf("buffer originale:%s\n",lpp.buffer);
-	 //printf("buffer copiato:%s\n",msgData);
-	 //for(i=0;i<42;i++){
-	 //       printf("-%c-\n",msgData[i]);
-	 //}
 	
 	} else {
 		ESP_LOGE(TAG_BME280, "init or setting error. code: %d", com_rslt);
@@ -348,8 +328,6 @@ static esp_err_t mqtt_event_handler(esp_mqtt_event_handle_t event)
         case MQTT_EVENT_CONNECTED:
             ESP_LOGI(TAG, "MQTT_EVENT_CONNECTED");
 	    _print_buffer_int(&lpp);
-            //msg_id = esp_mqtt_client_publish(client, mqtt_topic,(const char *) msgData, CAYENNE_LPP_MAX_BUFFER_SIZE, 1, 0);
-            //msg_id = esp_mqtt_client_publish(client, mqtt_topic,(const char *) msgData, msgDatalen, 1, 0);
             msg_id = esp_mqtt_client_publish(client, mqtt_topic,(const char *) lpp.buffer, lpp.cursor, 1, 0);
             break;
         case MQTT_EVENT_DISCONNECTED:
