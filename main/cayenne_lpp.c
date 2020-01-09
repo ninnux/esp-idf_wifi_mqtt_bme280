@@ -184,3 +184,16 @@ void cayenne_lpp_add_gps(cayenne_lpp_t *lpp, uint8_t channel, float latitude,
     lpp->buffer[lpp->cursor++] = alt >> 8;
     lpp->buffer[lpp->cursor++] = alt;
 }
+void cayenne_lpp_add_unixtimestamp(cayenne_lpp_t *lpp, uint8_t channel,
+                                         uint32_t time)
+{
+    assert((lpp->cursor + CAYENNE_LPP_UNIXTIMESTAMP_SIZE) < CAYENNE_LPP_MAX_BUFFER_SIZE);
+
+    int32_t val = time;
+    lpp->buffer[lpp->cursor++] = channel;
+    lpp->buffer[lpp->cursor++] = CAYENNE_LPP_UNIXTIMESTAMP;
+    lpp->buffer[lpp->cursor++] = val >> 24;
+    lpp->buffer[lpp->cursor++] = val >> 16;
+    lpp->buffer[lpp->cursor++] = val >> 8;
+    lpp->buffer[lpp->cursor++] = val;
+}
